@@ -55,8 +55,8 @@ final class AdapterMethodsFactory implements JsonAdapter.Factory {
       delegate = null;
     }
 
-    if (toAdapter != null) toAdapter.bind(moshi);
-    if (fromAdapter != null) fromAdapter.bind(moshi);
+    if (toAdapter != null) toAdapter.bind(moshi, this);
+    if (fromAdapter != null) fromAdapter.bind(moshi, this);
 
     return new JsonAdapter<Object>() {
       @Override public void toJson(JsonWriter writer, Object value) throws IOException {
@@ -170,8 +170,8 @@ final class AdapterMethodsFactory implements JsonAdapter.Factory {
           parameterTypes.length, 1, nullable) {
         private JsonAdapter<Object> delegate;
 
-        @Override public void bind(Moshi moshi) {
-          super.bind(moshi);
+        @Override public void bind(Moshi moshi, JsonAdapter.Factory factory) {
+          super.bind(moshi, factory);
           delegate = moshi.adapter(returnType, returnTypeAnnotations);
         }
 
@@ -233,8 +233,8 @@ final class AdapterMethodsFactory implements JsonAdapter.Factory {
           parameterTypes.length, 1, nullable) {
         JsonAdapter<Object> delegate;
 
-        @Override public void bind(Moshi moshi) {
-          super.bind(moshi);
+        @Override public void bind(Moshi moshi, JsonAdapter.Factory factory) {
+          super.bind(moshi, factory);
           delegate = moshi.adapter(parameterTypes[0], qualifierAnnotations);
         }
 
@@ -285,14 +285,18 @@ final class AdapterMethodsFactory implements JsonAdapter.Factory {
       this.nullable = nullable;
     }
 
-    public void bind(Moshi moshi) {
+    public void bind(Moshi moshi, JsonAdapter.Factory factory) {
       if (jsonAdapters.length > 0) {
         Type[] parameterTypes = method.getGenericParameterTypes();
         Annotation[][] parameterAnnotations = method.getParameterAnnotations();
         for (int i = adaptersOffset, size = parameterTypes.length; i < size; i++) {
-          jsonAdapters[i - adaptersOffset] = moshi.adapter(
-              ((ParameterizedType) parameterTypes[i]).getActualTypeArguments()[0],
-              jsonAnnotations(parameterAnnotations[i]));
+          Type type = ((ParameterizedType) parameterTypes[i]).getActualTypeArguments()[0];
+          Set<? extends Annotation> jsonAnnotations = jsonAnnotations(parameterAnnotations[i]);
+          if (this.type == type && annotations.equals(jsonAnnotations)) {
+            jsonAdapters[i - adaptersOffset] = moshi.nextAdapter(factory, type, jsonAnnotations);
+          } else {
+            jsonAdapters[i - adaptersOffset] = moshi.adapter(type, jsonAnnotations);
+          }
         }
       }
     }
